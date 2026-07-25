@@ -199,104 +199,6 @@ class TestMarketOverviewEndpoint:
         assert "indices" in data
 
 
-class TestBacktestEndpoint:
-    """测试回测端点"""
-
-    @patch("stock_analyzer.core.data_fetcher.DataFetcher.get_stock_data")
-    def test_backtest_buy_hold(self, mock_data, client: TestClient):
-        mock_data.return_value = _mock_stock_data(100)
-
-        payload = {
-            "symbol": "AAPL",
-            "strategy": "buy_hold",
-            "initial_capital": 100000.0,
-        }
-        response = client.post("/backtest", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["symbol"] == "AAPL"
-        assert data["strategy"] == "buy_hold"
-        assert "metrics" in data
-        assert "equity_curve" in data
-        assert len(data["equity_curve"]) > 0
-
-    @patch("stock_analyzer.core.data_fetcher.DataFetcher.get_stock_data")
-    def test_backtest_sma_cross(self, mock_data, client: TestClient):
-        mock_data.return_value = _mock_stock_data(100)
-
-        payload = {
-            "symbol": "MSFT",
-            "strategy": "sma_cross",
-            "initial_capital": 50000.0,
-        }
-        response = client.post("/backtest", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["strategy"] == "sma_cross"
-        assert "metrics" in data
-
-    @patch("stock_analyzer.core.data_fetcher.DataFetcher.get_stock_data")
-    def test_backtest_rsi(self, mock_data, client: TestClient):
-        mock_data.return_value = _mock_stock_data(100)
-
-        payload = {
-            "symbol": "AAPL",
-            "strategy": "rsi",
-            "initial_capital": 100000.0,
-        }
-        response = client.post("/backtest", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["strategy"] == "rsi"
-
-
-class TestOptimizeEndpoint:
-    """测试组合优化端点"""
-
-    @patch("stock_analyzer.core.data_fetcher.DataFetcher.get_multiple_stocks")
-    def test_optimize_max_sharpe(self, mock_multi, client: TestClient):
-        mock_multi.return_value = {
-            "AAPL": _mock_stock_data(100),
-            "MSFT": _mock_stock_data(100),
-            "GOOGL": _mock_stock_data(100),
-        }
-
-        payload = {"symbols": ["AAPL", "MSFT", "GOOGL"]}
-        response = client.post("/optimize", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert "weights" in data
-        assert "expected_return" in data
-        assert "volatility" in data
-        assert "sharpe_ratio" in data
-        # 权重之和应接近 1
-        total_weight = sum(data["weights"].values())
-        assert abs(total_weight - 1.0) < 0.01
-
-    @patch("stock_analyzer.core.data_fetcher.DataFetcher.get_multiple_stocks")
-    def test_optimize_target_return(self, mock_multi, client: TestClient):
-        mock_multi.return_value = {
-            "AAPL": _mock_stock_data(100),
-            "MSFT": _mock_stock_data(100),
-            "GOOGL": _mock_stock_data(100),
-        }
-
-        payload = {
-            "symbols": ["AAPL", "MSFT", "GOOGL"],
-            "target_return": 0.10,
-        }
-        response = client.post("/optimize", json=payload)
-        assert response.status_code == 200
-        data = response.json()
-        assert "weights" in data
-        assert "expected_return" in data
-
-    def test_optimize_insufficient_symbols(self, client: TestClient):
-        """测试股票数量不足时应返回错误"""
-        payload = {"symbols": ["AAPL"]}
-        response = client.post("/optimize", json=payload)
-        # 单只股票无法进行组合优化
-        assert response.status_code == 500
 
 
 class TestRequestValidation:
@@ -317,12 +219,4 @@ class TestRequestValidation:
         response = client.post("/portfolio/analyze", json=payload)
         assert response.status_code == 422
 
-    def test_backtest_missing_symbol(self, client: TestClient):
-        payload = {"strategy": "buy_hold"}
-        response = client.post("/backtest", json=payload)
-        assert response.status_code == 422
 
-    def test_optimize_missing_symbols(self, client: TestClient):
-        payload = {}
-        response = client.post("/optimize", json=payload)
-        assert response.status_code == 422

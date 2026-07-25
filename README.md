@@ -122,7 +122,6 @@ POST /analyze       单只股票分析
 POST /analyze/batch  批量分析
 POST /portfolio/analyze  组合分析
 GET  /market/overview   市场概览
-POST /backtest       策略回测
 GET  /health         健康检查
 ```
 

@@ -1,19 +1,16 @@
 """
 StockAnalyzer AI FastAPI Web 服务
-提供股票分析、投资组合分析、回测、组合优化等 RESTful API
+提供股票分析、投资组合分析、市场概览等 RESTful API
 """
 import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
-import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from stock_analyzer.backtest import BacktestEngine
 from stock_analyzer.core.engine import StockAnalyzerEngine
-from stock_analyzer.core.portfolio_optimizer import PortfolioOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class AnalyzeRequest(BaseModel):
-    symbol: str = Field(..., description="股票代码，如 AAPL, 600519.SS")
+    symbol: str = Field(..., description="股票代码，如 AAPL")
     include_technical: bool = Field(True, description="是否包含技术分析")
     include_fundamental: bool = Field(True, description="是否包含基本面分析")
 
@@ -70,33 +67,6 @@ class MarketOverviewResponse(BaseModel):
     success: bool
     indices: Dict[str, Any]
     error: Optional[str] = None
-
-
-class BacktestRequest(BaseModel):
-    symbol: str = Field(..., description="股票代码")
-    strategy: str = Field(..., description="策略名称，如 buy_hold, sma_cross")
-    initial_capital: float = Field(100000.0, description="初始资金")
-
-
-class BacktestResponse(BaseModel):
-    symbol: str
-    strategy: str
-    metrics: Dict[str, Any]
-    trade_count: int
-    trades: List[Dict[str, Any]]
-    equity_curve: List[float]
-
-
-class OptimizeRequest(BaseModel):
-    symbols: List[str] = Field(..., description="股票代码列表")
-    target_return: Optional[float] = Field(None, description="目标年化收益率")
-
-
-class OptimizeResponse(BaseModel):
-    weights: Dict[str, float]
-    expected_return: float
-    volatility: float
-    sharpe_ratio: float
 
 
 # ---------------------------------------------------------------------------
@@ -215,130 +185,4 @@ def create_app() -> FastAPI:
             logger.error(f"获取市场概览失败: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @app.post("/backtest", response_model=BacktestResponse)
-    async def backtest(
-        request: BacktestRequest,
-        engine: StockAnalyzerEngine = Depends(get_engine),
-    ):
-        """执行回测"""
-        try:
-            data = engine.data_fetcher.get_stock_data(request.symbol, period="1y")
-            if data.empty:
-                raise ValueError(f"无法获取 {request.symbol} 的数据")
-
-            signals = _generate_signals(data, request.strategy)
-
-            bt = BacktestEngine(initial_capital=request.initial_capital)
-            bt.run_strategy(data, signals)
-            metrics = bt.get_performance_metrics()
-
-            return BacktestResponse(
-                symbol=request.symbol,
-                strategy=request.strategy,
-                metrics=metrics,
-                trade_count=metrics.get("trade_count", 0),
-                trades=bt.get_trade_history(),
-                equity_curve=bt.equity_curve,
-            )
-        except Exception as e:
-            logger.error(f"回测失败: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    @app.post("/optimize", response_model=OptimizeResponse)
-    async def optimize_portfolio(
-        request: OptimizeRequest,
-        engine: StockAnalyzerEngine = Depends(get_engine),
-    ):
-        """投资组合优化"""
-        try:
-            # 获取各股票历史数据
-            data_dict = engine.data_fetcher.get_multiple_stocks(request.symbols, period="1y")
-            if not data_dict:
-                raise ValueError("无法获取任何股票数据")
-
-            # 构建收益率矩阵
-            returns_df = pd.DataFrame()
-            for symbol, df in data_dict.items():
-                if not df.empty and "Close" in df.columns:
-                    returns_df[symbol] = df["Close"].pct_change()
-
-            returns_df = returns_df.dropna()
-
-            if returns_df.empty or len(returns_df.columns) < 2:
-                raise ValueError("有效股票数据不足，无法进行优化")
-
-            optimizer = PortfolioOptimizer(returns_df)
-
-            if request.target_return is not None:
-                result = optimizer.mean_variance_optimization(target_return=request.target_return)
-            else:
-                result = optimizer.max_sharpe_ratio()
-
-            return OptimizeResponse(
-                weights=result["weights"],
-                expected_return=result["expected_return"],
-                volatility=result["volatility"],
-                sharpe_ratio=result["sharpe_ratio"],
-            )
-        except Exception as e:
-            logger.error(f"组合优化失败: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
     return app
-
-
-# ---------------------------------------------------------------------------
-# 策略信号生成
-# ---------------------------------------------------------------------------
-
-def _generate_signals(data: pd.DataFrame, strategy: str) -> List[str]:
-    """根据策略名称生成交易信号列表"""
-    prices = data["Close"].values
-    n = len(prices)
-    signals = ["hold"] * n
-
-    if strategy == "buy_hold":
-        signals[0] = "buy"
-        signals[-1] = "sell"
-
-    elif strategy == "sma_cross":
-        if n < 60:
-            return signals
-        sma20 = pd.Series(prices).rolling(window=20).mean().values
-        sma60 = pd.Series(prices).rolling(window=60).mean().values
-        in_position = False
-        for i in range(60, n):
-            if sma20[i] > sma60[i] and not in_position:
-                signals[i] = "buy"
-                in_position = True
-            elif sma20[i] < sma60[i] and in_position:
-                signals[i] = "sell"
-                in_position = False
-        if in_position:
-            signals[-1] = "sell"
-
-    elif strategy == "rsi":
-        if n < 14:
-            return signals
-        delta = pd.Series(prices).diff()
-        gain = delta.where(delta > 0, 0).rolling(window=14).mean().values
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().values
-        rs = gain / (loss + 1e-10)
-        rsi = 100 - (100 / (1 + rs))
-        in_position = False
-        for i in range(14, n):
-            if rsi[i] < 30 and not in_position:
-                signals[i] = "buy"
-                in_position = True
-            elif rsi[i] > 70 and in_position:
-                signals[i] = "sell"
-                in_position = False
-        if in_position:
-            signals[-1] = "sell"
-
-    else:
-        # 默认 buy_hold
-        signals[0] = "buy"
-        signals[-1] = "sell"
-
-    return signals

@@ -794,43 +794,12 @@ def render_single_analysis(engine, weights=(0.35, 0.35, 0.30)):
                 if "Too Many Requests" in error_text or "Rate limited" in error_text or "429" in error_text:
                     st.warning("⚠️ Yahoo Finance API限流中，正在使用模拟数据进行演示分析...")
                     try:
-                        from stock_analyzer.core.demo_data import DemoDataGenerator
-                        from stock_analyzer.core.analyzer import TechnicalAnalyzer
+                                                from stock_analyzer.core.analyzer import TechnicalAnalyzer
                         from stock_analyzer.agents.coordinator import AgentCoordinator
                         from stock_analyzer.agents.technical_agent import TechnicalAgent
                         from stock_analyzer.agents.fundamental_agent import FundamentalAgent
                                                 
-                        generator = DemoDataGenerator()
-                        demo_data = generator.generate_stock_data(symbol, days=365)
-                        
-                        if not demo_data.empty:
-                            # 用demo数据重新构建分析结果
-                            tech_analyzer = TechnicalAnalyzer()
-                            tech_result = tech_analyzer.full_analysis(demo_data).iloc[-1].to_dict()
-                            
-                            coordinator = AgentCoordinator()
-                            coordinator.register_agent(TechnicalAgent(), weight=tech_weight)
-                            coordinator.register_agent(FundamentalAgent(), weight=fund_weight)
-                            coordinator.register_agent(SentimentAgent(), weight=sent_weight)
-                            
-                            analysis_data = {
-                                "historical_data": demo_data,
-                                "stock_info": {"symbol": symbol, "name": symbol, "sector": "N/A", "market_cap": 0}
-                            }
-                            coord_result = coordinator.analyze(symbol, analysis_data)
-                            
-                            fallback_result = {
-                                "symbol": symbol,
-                                "success": True,
-                                "decision": coord_result["final_decision"],
-                                "individual_signals": coord_result["individual_signals"],
-                                "summary": coord_result["analysis_summary"],
-                                "technical_analysis": tech_analyzer.full_analysis(demo_data).iloc[-10:].to_dict(),
-                                "stock_info": {"symbol": symbol, "name": symbol},
-                                "is_demo_data": True,
-                            }
-                            _display_single_result(fallback_result)
-                        else:
+                        st.info("无法获取数据，请检查 API Key 配置")
                             st.error("❌ 模拟数据生成失败，请稍后再试")
                     except Exception as demo_err:
                         st.error(f"❌ 演示分析出错: {demo_err}")
