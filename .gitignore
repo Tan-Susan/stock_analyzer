@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+.env.bak
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Trae
+.trae-html-share-packages/
+
+# Interview docs (personal)
+面试稿-*.md
+stock_analyzer-interview-summary/
