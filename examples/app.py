@@ -384,8 +384,8 @@ st.markdown("""
 # 缓存引擎实例
 # ============================================================
 @st.cache_resource
+def get_engine():
     """获取 StockAnalyzerEngine 引擎实例，使用 st 缓存避免重复初始化"""
-    if twelve_data_key:
         return StockAnalyzerEngine()
     return StockAnalyzerEngine()
 
@@ -720,37 +720,14 @@ def render_sidebar():
         
         st.markdown("<hr style='margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
-        # 数据源配置
-        st.markdown("<div style='font-size: 0.75rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.5rem;'>数据源配置</div>", unsafe_allow_html=True)
 
-        twelve_key = st.text_input(
-            "Twelve Data API Key",
-            value=st.session_state.get("twelve_data_key", ""),
-            type="password",
-            placeholder="输入API Key获取真实数据",
-            help="免费获取: https://twelvedata.com/pricing (每天800次免费调用)",
-        )
-        if twelve_key:
-
-        if not twelve_key:
-            st.markdown("""
-            <div style='background: rgba(255,165,0,0.08); border: 1px solid rgba(255,165,0,0.2); border-radius: 6px; padding: 0.5rem; margin-top: 0.5rem;'>
-                <div style='font-size: 0.7rem; color: rgba(255,165,0,0.8);'>
-                    ⚠️ 未配置API Key，使用模拟数据演示<br>
-                    <a href="https://twelvedata.com/pricing" target="_blank" style="color: #00d4ff;">免费注册获取真实数据 →</a>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
+        st.markdown("""
             <div style='background: rgba(0,245,160,0.08); border: 1px solid rgba(0,245,160,0.2); border-radius: 6px; padding: 0.5rem; margin-top: 0.5rem;'>
                 <div style='font-size: 0.7rem; color: #00f5a0;'>
-                    ✅ 已配置API Key，将获取真实数据
+                    数据源: Alpha Vantage
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
-        st.markdown("<hr style='margin: 1.5rem 0;'>", unsafe_allow_html=True)
 
         # 系统状态
         st.markdown("""
@@ -763,7 +740,7 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
-        return page, (tech_weight, fund_weight, sent_weight), twelve_key
+        return page, (tech_weight, fund_weight, sent_weight)
 
 
 def render_single_analysis(engine, weights=(0.35, 0.35, 0.30)):
@@ -884,7 +861,7 @@ def _display_single_result(result):
     # 数据来源标识
     is_demo = result.get("is_demo_data", False)
     data_source_badge = (
-        "<span style='background: rgba(0,245,160,0.15); color: #00f5a0; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem;'>📡 真实数据 (Twelve Data)</span>"
+        "<span style='background: rgba(0,245,160,0.15); color: #00f5a0; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem;'>📡 数据源: Alpha Vantage</span>"
         if not is_demo else
         "<span style='background: rgba(255,165,0,0.15); color: #ffa502; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem;'>🎲 模拟数据</span>"
     )
@@ -1443,10 +1420,10 @@ def main():
     render_header()
     
     # 侧边栏导航
-    page, weights, twelve_key = render_sidebar()
+    page, weights = render_sidebar()
 
     # 获取引擎实例（传入API key配置）
-    engine = get_engine(twelve_data_key=twelve_key)
+    engine = get_engine()
 
     # 根据选择渲染对应页面
     if page == "📊 单股分析":
